@@ -4,14 +4,14 @@ import glob
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-%matplotlib inline
+# %matplotlib inline
 plt.style.use('ggplot')
 np.random.seed(1234)
 
 np.set_printoptions(formatter={'all':lambda x: '%.3f' %x})
 
-from IPython.display import Image
-from numpy.core.umath_tests import matrix_multiply as mm
+# from IPython.display import Image
+# from numpy.core.umath_tests import matrix_multiply as mm
 
 from scipy.optimize import minimize
 from scipy.stats import bernoulli,binom
@@ -28,5 +28,8 @@ xs = map(sum,[coin_A.rvs(m),coin_A.rvs(m),coin_B.rvs(m),coin_A.rvs(m),coin_B.rvs
 zs = [0,0,1,0,1]
 
 xs = np.array(xs)
+bnds = [(0,1),(0,1)]
+def neg_loglike(m,xs,):
+    return np.sum(np.log(xs))
+mimimize(fun,[0.5,0.5],args=(m,xs,zs),bounds=bnds,method='tnc',options={'maxiter':100})
 
-minimize()
