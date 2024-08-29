@@ -31,5 +31,5 @@ xs = np.array(xs)
 bnds = [(0,1),(0,1)]
 def neg_loglike(m,xs,):
     return np.sum(np.log(xs))
-mimimize(fun,[0.5,0.5],args=(m,xs,zs),bounds=bnds,method='tnc',options={'maxiter':100})
+minimize(fun,[0.5,0.5],args=(m,xs,zs),bounds=bnds,method='tnc',options={'maxiter':100})
 
