@@ -3,13 +3,14 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader,Dataset
 
-directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
+directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
 data_prefix = 'data'
 test_prefix = 'test'
 num_channels = 3
@@ -272,8 +273,8 @@ def test_loop(dataloader, model, loss_fn,device):
 data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
 data_test = CIFAR(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
 
-train_dataloader = DataLoader(data_train, batch_size= batch_size,shuffle=True,num_workers=4,pin_memory=True)
-test_dataloader = DataLoader(data_test, batch_size=batch_size,shuffle=True, num_workers=4,pin_memory=True)
+train_dataloader = DataLoader(data_train, batch_size= batch_size,shuffle=True,num_workers=0,pin_memory=True)
+test_dataloader = DataLoader(data_test, batch_size=batch_size,shuffle=True, num_workers=0,pin_memory=True)
 
 model = InceptionSmall(3).to(device)
 
@@ -297,6 +298,6 @@ for t in range(epochs):
     current_time = time.time()
     elapsed_time = current_time - start_time
     print(f'elapsed time is:{elapsed_time} seconds')
-    if epochs %100 ==0:
-        torch.save(model.state_dict(), 'model_weights'+str(epochs)+'.pth')
+    if t %100 ==0:
+        torch.save(model.state_dict(), 'model_weights'+str(t)+'.pth')
 print("Done!")
