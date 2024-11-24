@@ -10,23 +10,6 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader,Dataset
 
-directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
-data_prefix = 'data'
-test_prefix = 'test'
-num_channels = 3
-
-training_files = glob.glob(directory+os.sep+data_prefix+'*')
-test_files = glob.glob(directory+os.sep+test_prefix+'*')
-
-if torch.backends.mps.is_available():
-    device = torch.device("mps")
-
-elif torch.cuda.is_available():
-    device = torch.device("cuda")
-else:
-    device = torch.device("cpu")
-print(device)
-
 def unpickle(file):
     import pickle
     with open(file, 'rb') as fo:
@@ -84,30 +67,6 @@ def preprocessing(x,c_x=28,c_y=28,normalize=True,center_crop=True,whitening=True
                 new_x[i,:,:,j] = (temp - mean)/std_mod
             
     return new_x
-
-training_raw_images = []
-training_labels = []
-
-test_raw_images = []
-test_labels = []
-
-for file in training_files:
-    batch_dict = unpickle(file)
-    training_raw_images.append(batch_dict[b'data'])
-    training_labels.append(batch_dict[b'labels'])
-for file in test_files:
-    batch_dict = unpickle(file)
-    test_raw_images.append(batch_dict[b'data'])
-    test_labels.append(batch_dict[b'labels'])
-
-training_raw_images = changeDimension(training_raw_images)
-training_labels = changeDimension(training_labels)
-test_raw_images = changeDimension(test_raw_images)
-test_labels = changeDimension(test_labels)
-
-training_images = preprocessing(training_raw_images)
-test_images = preprocessing(test_raw_images)
-
 class CIFAR(Dataset):
     def __init__(self,data,label):
         super(CIFAR,self).__init__()
@@ -220,13 +179,6 @@ class InceptionSmall(nn.Module):
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x
-
-learning_rate = 0.1
-batch_size = 128
-epochs = 25000
-momentum = 0.9
-weight_decay = 0.95
-
 def train_loop(dataloader, model, loss_fn, optimizer,device):
     size = len(dataloader.dataset)
     # Set the model to training mode - important for batch normalization and dropout layers
@@ -270,34 +222,86 @@ def test_loop(dataloader, model, loss_fn,device):
     correct /= size
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
 
-data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
-data_test = CIFAR(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
 
-train_dataloader = DataLoader(data_train, batch_size= batch_size,shuffle=True,num_workers=0,pin_memory=True)
-test_dataloader = DataLoader(data_test, batch_size=batch_size,shuffle=True, num_workers=0,pin_memory=True)
+if __name__ == '__main__':
+    directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
+    data_prefix = 'data'
+    test_prefix = 'test'
+    num_channels = 3
 
-model = InceptionSmall(3).to(device)
+    training_files = glob.glob(directory+os.sep+data_prefix+'*')
+    test_files = glob.glob(directory+os.sep+test_prefix+'*')
 
-optimizer = optim.SGD(model.parameters(), lr=learning_rate,momentum=momentum)
-loss_fn = nn.CrossEntropyLoss()
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
 
-scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=weight_decay)
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+    print(device)
 
-total_params = sum(p.numel() for p in model.parameters())
-print(f"Number of parameters: {total_params}")
+    training_raw_images = []
+    training_labels = []
 
-start_time = time.time()
+    test_raw_images = []
+    test_labels = []
 
-for t in range(epochs):
-    print(f"Epoch {t+1}\n-------------------------------")
+    for file in training_files:
+        batch_dict = unpickle(file)
+        training_raw_images.append(batch_dict[b'data'])
+        training_labels.append(batch_dict[b'labels'])
+    for file in test_files:
+        batch_dict = unpickle(file)
+        test_raw_images.append(batch_dict[b'data'])
+        test_labels.append(batch_dict[b'labels'])
 
-    train_loop(train_dataloader, model, loss_fn, optimizer,device)
-    
-    test_loop(test_dataloader, model, loss_fn,device)
-    scheduler.step()
-    current_time = time.time()
-    elapsed_time = current_time - start_time
-    print(f'elapsed time is:{elapsed_time} seconds')
-    if t %100 ==0:
-        torch.save(model.state_dict(), 'model_weights'+str(t)+'.pth')
-print("Done!")
+    training_raw_images = changeDimension(training_raw_images)
+    training_labels = changeDimension(training_labels)
+    test_raw_images = changeDimension(test_raw_images)
+    test_labels = changeDimension(test_labels)
+
+    training_images = preprocessing(training_raw_images)
+    test_images = preprocessing(test_raw_images)
+
+
+
+    learning_rate = 0.1
+    batch_size = 128
+    epochs = 25000
+    momentum = 0.9
+    weight_decay = 0.95
+
+
+
+    data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
+    data_test = CIFAR(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
+
+    train_dataloader = DataLoader(data_train, batch_size= batch_size,shuffle=True,num_workers=4,pin_memory=True)
+    test_dataloader = DataLoader(data_test, batch_size=batch_size,shuffle=True, num_workers=4,pin_memory=True)
+
+    model = InceptionSmall(3).to(device)
+
+    optimizer = optim.SGD(model.parameters(), lr=learning_rate,momentum=momentum)
+    loss_fn = nn.CrossEntropyLoss()
+
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=weight_decay)
+
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Number of parameters: {total_params}")
+
+    start_time = time.time()
+
+    for t in range(epochs):
+        print(f"Epoch {t+1}\n-------------------------------")
+
+        train_loop(train_dataloader, model, loss_fn, optimizer,device)
+        
+        test_loop(test_dataloader, model, loss_fn,device)
+        scheduler.step()
+        current_time = time.time()
+        elapsed_time = current_time - start_time
+        print(f'elapsed time is:{elapsed_time} seconds')
+        if t %100 ==0:
+            torch.save(model.state_dict(), 'model_weights'+str(t)+'.pth')
+    print("Done!")
