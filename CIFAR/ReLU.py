@@ -302,6 +302,6 @@ if __name__ == '__main__':
         current_time = time.time()
         elapsed_time = current_time - start_time
         print(f'elapsed time is:{elapsed_time} seconds')
-        if t %100 ==0:
+        if t>0 and t %100 ==0:
             torch.save(model.state_dict(), 'model_weights'+str(t)+'.pth')
     print("Done!")
