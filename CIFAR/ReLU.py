@@ -2,7 +2,7 @@ import os
 import glob
 import numpy as np
 import matplotlib.pyplot as plt
-
+import time
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -285,6 +285,8 @@ scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=weight_decay)
 total_params = sum(p.numel() for p in model.parameters())
 print(f"Number of parameters: {total_params}")
 
+start_time = time.time()
+
 for t in range(epochs):
     print(f"Epoch {t+1}\n-------------------------------")
 
@@ -292,6 +294,9 @@ for t in range(epochs):
     
     test_loop(test_dataloader, model, loss_fn,device)
     scheduler.step()
+    current_time = time.time()
+    elapsed_time = current_time - start_time
+    print(f'elapsed time is:{elapsed_time} seconds')
     if epochs %100 ==0:
         torch.save(model.state_dict(), 'model_weights'+str(epochs)+'.pth')
 print("Done!")
