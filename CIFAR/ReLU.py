@@ -3,6 +3,7 @@ import glob
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import pickle
 
 import torch
 import torch.nn as nn
@@ -183,6 +184,8 @@ def train_loop(dataloader, model, loss_fn, optimizer,device):
     # Set the model to training mode - important for batch normalization and dropout layers
     # Unnecessary in this situation but added for best practices
     model.train()
+    train_loss = 0
+    num_batches = len(dataloader)
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
         # print(batch,X.shape,y.shape)
@@ -194,10 +197,13 @@ def train_loop(dataloader, model, loss_fn, optimizer,device):
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
+        train_loss += loss.item()
 
         if batch % 100 == 0:
             loss, current = loss.item(), batch * batch_size + len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+    train_loss/=num_batches
+    return train_loss
 
 
 def test_loop(dataloader, model, loss_fn,device):
@@ -220,6 +226,8 @@ def test_loop(dataloader, model, loss_fn,device):
     test_loss /= num_batches
     correct /= size
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+    return correct,test_loss
+    
 
 if __name__ == '__main__':
     directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
@@ -266,7 +274,7 @@ if __name__ == '__main__':
 
     learning_rate = 0.1
     batch_size = 128
-    epochs = 25000
+    epochs = 5
     momentum = 0.9
     weight_decay = 0.95
 
@@ -278,7 +286,11 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(data_train, batch_size= batch_size,shuffle=True,num_workers=4,pin_memory=True)
     test_dataloader = DataLoader(data_test, batch_size=batch_size,shuffle=True, num_workers=4,pin_memory=True)
 
-    model = InceptionSmall(3).to(device)
+    # model = InceptionSmall(3).to(device)
+    
+    model = InceptionSmall(3).to(device) # we do not specify ``weights``, i.e. create untrained model
+    model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
+
 
     optimizer = optim.SGD(model.parameters(), lr=learning_rate,momentum=momentum)
     loss_fn = nn.CrossEntropyLoss()
@@ -293,13 +305,17 @@ if __name__ == '__main__':
     for t in range(epochs):
         print(f"Epoch {t+1}\n-------------------------------")
 
-        train_loop(train_dataloader, model, loss_fn, optimizer,device)
+        train_loss = train_loop(train_dataloader, model, loss_fn, optimizer,device)
         
-        test_loop(test_dataloader, model, loss_fn,device)
+        test_correct, test_loss = test_loop(test_dataloader, model, loss_fn,device)
         scheduler.step()
         current_time = time.time()
         elapsed_time = current_time - start_time
         print(f'elapsed time is:{elapsed_time} seconds')
-        if t>0 and t %100 ==0:
-            torch.save(model.state_dict(), 'model_weights'+str(t)+'.pth')
+        if t % 50 ==0:
+            torch.save(model.state_dict(), directory + os.sep + 'model' + os.sep + 'model_weights'+str(t)+'.pth')
+        if t % 1==0:
+            print(f'saving running results')
+        with open(directory + os.sep + 'model' + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
+            pickle.dump([train_loss,test_correct,test_loss], file)
     print("Done!")
