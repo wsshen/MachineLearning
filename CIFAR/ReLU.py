@@ -17,7 +17,6 @@ def unpickle(file):
     return dict
 
 def changeDimension(x):
-    
     assert isinstance(x,list),'x must be list type'
     np_x = np.array(x)
     # print(np_x.shape)
@@ -47,26 +46,25 @@ def preprocessing(x,c_x=28,c_y=28,normalize=True,center_crop=True,whitening=True
     stop_y = start_y + c_y
     new_x = np.zeros((sp[0],sp[1],c_x,c_y))
 
-
     for i in range(sp[0]):
         for j in range(sp[1]):
             if normalize:
-                image = x[i,:,:,j]/255
+                image = x[i,j,:,:]/255
             else:
-                image = x[i,:,:,j]
+                image = x[i,j,:,:]
             if center_crop:
-                new_x[i,:,:,j] = image[start_x:stop_x,start_y:stop_y]
+                new_x[i,j,:,:] = image[start_x:stop_x,start_y:stop_y]
             else:
-                new_x[i,:,:,j] = image
+                new_x[i,j,:,:] = image
 
             if whitening:
                 temp = image[start_x:stop_x,start_y:stop_y]
                 mean = np.mean(temp)
                 std = np.std(temp)
                 std_mod = max(std,1/np.sqrt(np.size(temp)))
-                new_x[i,:,:,j] = (temp - mean)/std_mod
-            
+                new_x[i,j,:,:] = (temp - mean)/std_mod
     return new_x
+
 class CIFAR(Dataset):
     def __init__(self,data,label):
         super(CIFAR,self).__init__()
@@ -179,6 +177,7 @@ class InceptionSmall(nn.Module):
         x = torch.flatten(x, 1)
         x = self.fc(x)
         return x
+    
 def train_loop(dataloader, model, loss_fn, optimizer,device):
     size = len(dataloader.dataset)
     # Set the model to training mode - important for batch normalization and dropout layers
@@ -221,7 +220,6 @@ def test_loop(dataloader, model, loss_fn,device):
     test_loss /= num_batches
     correct /= size
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
-
 
 if __name__ == '__main__':
     directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
