@@ -230,7 +230,7 @@ def test_loop(dataloader, model, loss_fn,device):
     
 
 if __name__ == '__main__':
-    directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
+    directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
     data_prefix = 'data'
     test_prefix = 'test'
     num_channels = 3
@@ -274,7 +274,7 @@ if __name__ == '__main__':
 
     learning_rate = 0.1
     batch_size = 128
-    epochs = 5
+    epochs = 5000
     momentum = 0.9
     weight_decay = 0.95
 
@@ -286,10 +286,10 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(data_train, batch_size= batch_size,shuffle=True,num_workers=4,pin_memory=True)
     test_dataloader = DataLoader(data_test, batch_size=batch_size,shuffle=True, num_workers=4,pin_memory=True)
 
-    # model = InceptionSmall(3).to(device)
+    model = InceptionSmall(3).to(device)
     
-    model = InceptionSmall(3).to(device) # we do not specify ``weights``, i.e. create untrained model
-    model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
+    # model = InceptionSmall(3).to(device) # we do not specify ``weights``, i.e. create untrained model
+    # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
 
 
     optimizer = optim.SGD(model.parameters(), lr=learning_rate,momentum=momentum)
@@ -314,7 +314,7 @@ if __name__ == '__main__':
         print(f'elapsed time is:{elapsed_time} seconds')
         if t % 50 ==0:
             torch.save(model.state_dict(), directory + os.sep + 'model' + os.sep + 'model_weights'+str(t)+'.pth')
-        if t % 1==0:
+        if t % 10==0:
             print(f'saving running results')
         with open(directory + os.sep + 'model' + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
             pickle.dump([train_loss,test_correct,test_loss], file)
