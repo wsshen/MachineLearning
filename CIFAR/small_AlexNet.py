@@ -108,9 +108,9 @@ class AlexnetSmall(nn.Module):
         super(AlexnetSmall, self).__init__()
         self.conv1 = Conv(input_channel,128,5,1,2)
         self.conv2 = Conv(128,256,5,1,2)
-        self.avgpool = nn.AvgPool2d((6, 6))
+        self.maxpool = nn.MaxPool2d(3, stride=2)
 
-        self.fc1 = fullconnect(256,384)
+        self.fc1 = fullconnect(1024,384)
         self.fc2 = fullconnect(384,192)
         self.fc3 = nn.Linear(192, 10)  # 10-way classification
 
@@ -119,8 +119,8 @@ class AlexnetSmall(nn.Module):
         print('conv1 done',x.shape)
         x = self.conv2(x)
         print('conv2 done',x.shape)
-        x = self.avgpool(x)
-        print('average pool is done',x.shape)
+        x = self.maxpool(x)
+        print('max pool is done',x.shape)
         x = torch.flatten(x,1)
         print('x dimension after flattening',x.shape)
         x = self.fc1(x)
