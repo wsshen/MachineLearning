@@ -1,7 +1,6 @@
 import os
 import glob
 import numpy as np
-import matplotlib.pyplot as plt
 import time
 import pickle
 
@@ -219,7 +218,7 @@ if __name__ == '__main__':
     training_images = preprocessing(training_raw_images)
     test_images = preprocessing(test_raw_images)
 
-    learning_rate = 0.1
+    learning_rate = 0.01
     batch_size = 128
     epochs = 5000
     momentum = 0.9
