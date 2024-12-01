@@ -82,88 +82,49 @@ class Conv(nn.Module):
     def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
         super(Conv, self).__init__()
         self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.batchnorm = nn.BatchNorm2d(output_channel) 
+        self.max = nn.MaxPool2d(3, stride=2,padding=1)
+        self.localnorm = nn.LocalResponseNorm(5,alpha=1e-4,beta=0.75,k=2)
         self.relu = nn.ReLU()
 
     def forward(self, x):
         x = self.conv(x)
-        x = self.batchnorm(x)
+        x = self.max(x)
+        x = self.localnorm(x)
         x = self.relu(x)
         return x
     
-class Inception(nn.Module):
-    def __init__(self, input_channel, output1, output3):
-        super(Inception,self).__init__()
-        self.branch1 = Conv(input_channel, output1, 1, 1,padding=0)
-        self.branch3 = Conv(input_channel, output3, 3, 1,padding=1)
+class fullconnect(nn.Module):
+    def __init__(self,input_channel,output_channel):
+        super(fullconnect, self).__init__()
+        self.fc = nn.Linear(input_channel,output_channel)
+        self.relu = nn.ReLU()
 
     def forward(self, x):
-        b1 = self.branch1(x)  
-        b3 = self.branch3(x) 
-        # print(b1.shape,b3.shape)
-        # Concatenate along the channel dimension
-        return torch.cat([b1, b3], dim=1)
-
-class AlexNetSmall(nn.Module):
-    def __init__(self,input_channel):
-        super(AlexNetSmall, self).__init__()
-        self.initial_conv = Conv(input_channel, 96, 3, 1,1)  
-
-        # First Inception Block
-        self.inception1 = Inception(96, 32, 32)
-        self.inception2 = Inception(64, 32, 48)
-        self.downsample1 = Downsample(80, 80)
-
-        # Second Inception Block
-        self.inception3 = Inception(160, 112, 48)
-        self.inception4 = Inception(160, 96, 64)
-        self.inception5 = Inception(160, 80, 80)
-        self.inception6 = Inception(160, 48, 96)
-        self.downsample2 = Downsample(144, 96)
-
-        # Final Inception Block
-        self.inception7 = Inception(240, 176, 160)
-        self.inception8 = Inception(336, 176, 160)
-
-        # Classification Head
-        self.global_pool = nn.AvgPool2d(7)  # 7x7 kernel global pooling
-        self.fc = nn.Linear(336, 10)  # 10-way classification
-
-    def forward(self, x):
-        x = self.initial_conv(x)
-        # print('initial_conv done')
-        x = self.inception1(x)
-        # print('inception1 done')
-        x = self.inception2(x)
-        # print('inception2 done')
-
-        x = self.downsample1(x)
-        # print('downsample1 done')
-        x = self.inception3(x)
-        # print('inception3 done')
-
-        x = self.inception4(x)
-        # print('inception4 done')
-
-        x = self.inception5(x)
-        # print('inception5 done')
-
-        x = self.inception6(x)
-        # print('inception6 done')
-
-        x = self.downsample2(x)
-        # print('downsample2 done',x.shape)
-        x = self.inception7(x)
-        # print('inception7 done')
-
-        x = self.inception8(x)
-        # print('inception8 done')
-
-        x = self.global_pool(x)
-        # print('global_pool done')
-        # print(x.shape)
-        x = torch.flatten(x, 1)
         x = self.fc(x)
+        x = self.relu(x)
+        return x
+    
+class AlexnetSmall(nn.Module):
+    def __init__(self,input_channel):
+        super(AlexnetSmall, self).__init__()
+        self.conv1 = Conv(input_channel,160,5,3,1)
+        self.conv2 = Conv(160,256,5,3,0)
+        self.fc1 = fullconnect(256,384)
+        self.fc2 = fullconnect(384,192)
+        self.fc3 = nn.Linear(192, 10)  # 10-way classification
+
+    def forward(self, x):
+        x = self.conv1(x)
+        # print('conv1 done',x.shape)
+        x = self.conv2(x)
+        # print('conv2 done',x.shape)
+        x = torch.flatten(x,1)
+        x = self.fc1(x)
+        # print('fc1 done')
+        x = self.fc2(x)
+        # print('fc2 done')
+        x = self.fc3(x)
+        # print('fc3 done')
         return x
     
 def train_loop(dataloader, model, loss_fn, optimizer,device):
@@ -217,7 +178,7 @@ def test_loop(dataloader, model, loss_fn,device):
     
 
 if __name__ == '__main__':
-    directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
+    directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
     data_prefix = 'data'
     test_prefix = 'test'
     num_channels = 3
@@ -225,13 +186,14 @@ if __name__ == '__main__':
     training_files = glob.glob(directory+os.sep+data_prefix+'*')
     test_files = glob.glob(directory+os.sep+test_prefix+'*')
 
-    if torch.backends.mps.is_available():
-        device = torch.device("mps")
+    # if torch.backends.mps.is_available():
+    #     device = torch.device("mps")
 
-    elif torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
+    # elif torch.cuda.is_available():
+    #     device = torch.device("cuda")
+    # else:
+    #     device = torch.device("cpu")
+    device = torch.device("cpu")
     print(device)
 
     training_raw_images = []
@@ -257,15 +219,11 @@ if __name__ == '__main__':
     training_images = preprocessing(training_raw_images)
     test_images = preprocessing(test_raw_images)
 
-
-
     learning_rate = 0.1
     batch_size = 128
     epochs = 5000
     momentum = 0.9
     weight_decay = 0.95
-
-
 
     data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
     data_test = CIFAR(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
@@ -273,7 +231,7 @@ if __name__ == '__main__':
     train_dataloader = DataLoader(data_train, batch_size= batch_size,shuffle=True,num_workers=4,pin_memory=True)
     test_dataloader = DataLoader(data_test, batch_size=batch_size,shuffle=True, num_workers=4,pin_memory=True)
 
-    model = InceptionSmall(3).to(device)
+    model = AlexnetSmall(3).to(device)
     
     # model = InceptionSmall(3).to(device) # we do not specify ``weights``, i.e. create untrained model
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
@@ -300,9 +258,9 @@ if __name__ == '__main__':
         elapsed_time = current_time - start_time
         print(f'elapsed time is:{elapsed_time} seconds')
         if t % 50 ==0:
-            torch.save(model.state_dict(), directory + os.sep + 'model' + os.sep + 'model_weights'+str(t)+'.pth')
+            torch.save(model.state_dict(), directory + os.sep + 'model_alexnet' + os.sep + 'model_weights'+str(t)+'.pth')
         if t % 10==0:
             print(f'saving running results')
-        with open(directory + os.sep + 'model' + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
+        with open(directory + os.sep + 'model_alexnet' + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
             pickle.dump([train_loss,test_correct,test_loss], file)
     print("Done!")
