@@ -81,7 +81,7 @@ class Conv(nn.Module):
     def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
         super(Conv, self).__init__()
         self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.max = nn.MaxPool2d(3, stride=2,padding=1)
+        self.max = nn.MaxPool2d(3, stride=2,padding=0)
         self.localnorm = nn.LocalResponseNorm(5,alpha=1e-4,beta=0.75,k=2)
         self.relu = nn.ReLU()
 
@@ -106,18 +106,23 @@ class fullconnect(nn.Module):
 class AlexnetSmall(nn.Module):
     def __init__(self,input_channel):
         super(AlexnetSmall, self).__init__()
-        self.conv1 = Conv(input_channel,160,5,3,1)
-        self.conv2 = Conv(160,256,5,3,0)
+        self.conv1 = Conv(input_channel,128,5,1,2)
+        self.conv2 = Conv(128,256,5,1,2)
+        self.avgpool = nn.AvgPool2d((6, 6))
+
         self.fc1 = fullconnect(256,384)
         self.fc2 = fullconnect(384,192)
         self.fc3 = nn.Linear(192, 10)  # 10-way classification
 
     def forward(self, x):
         x = self.conv1(x)
-        # print('conv1 done',x.shape)
+        print('conv1 done',x.shape)
         x = self.conv2(x)
-        # print('conv2 done',x.shape)
+        print('conv2 done',x.shape)
+        x = self.avgpool(x)
+        print('average pool is done',x.shape)
         x = torch.flatten(x,1)
+        print('x dimension after flattening',x.shape)
         x = self.fc1(x)
         # print('fc1 done')
         x = self.fc2(x)
@@ -220,7 +225,7 @@ if __name__ == '__main__':
 
     learning_rate = 0.01
     batch_size = 128
-    epochs = 5000
+    epochs = 1
     momentum = 0.9
     weight_decay = 0.95
 
