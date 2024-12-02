@@ -238,10 +238,24 @@ def main():
 
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
+    plot_flags = ''
+    if args.random_label:
+        plot_flags+='randomlabels'
+    plotdir = (
+        plot_flags
+        + "_"
+        + time.strftime("%m-%d-%Y_%H-%M-%S")
+    )
 
     directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
+    model_folder = 'small_inception'
     data_prefix = 'data'
     test_prefix = 'test'
+    
+    plotdir = os.path.join(directory, model_folder, plotdir)
+    args.plot_dir = plotdir
+    if not (os.path.exists(plotdir)):
+        os.makedirs(plotdir)
 
     training_files = glob.glob(directory+os.sep+data_prefix+'*')
     test_files = glob.glob(directory+os.sep+test_prefix+'*')
@@ -315,10 +329,10 @@ def main():
         elapsed_time = current_time - start_time
         print(f'elapsed time is:{elapsed_time} seconds')
         if t % 50 ==0:
-            torch.save(model.state_dict(), directory + os.sep + 'model_inception' + os.sep + 'model_weights'+str(t)+'.pth')
+            torch.save(model.state_dict(), plotdir + os.sep + 'model_weights'+str(t)+'.pth')
         if t % 10==0:
             print(f'saving running results')
-        with open(directory + os.sep + 'model_inception' + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
+        with open(plotdir + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
             pickle.dump([train_correct,train_loss,test_correct,test_loss], file)
     print("Done!")
 
