@@ -16,7 +16,7 @@ def unpickle(file):
         dict = pickle.load(fo, encoding='bytes')
     return dict
 
-def changeDimension(x):
+def changeDimension(x,num_channels):
     assert isinstance(x,list),'x must be list type'
     np_x = np.array(x)
     # print(np_x.shape)
@@ -64,6 +64,15 @@ def preprocessing(x,c_x=28,c_y=28,normalize=True,center_crop=True,whitening=True
                 std_mod = max(std,1/np.sqrt(np.size(temp)))
                 new_x[i,j,:,:] = (temp - mean)/std_mod
     return new_x
+
+class model_hyperparam(object):
+    def __init__(self,learning_rate,batch_size,epochs,momentum,weight_decay,num_channels):
+        self.learning_rate = learning_rate
+        self.batch_size = batch_size
+        self.epochs = epochs
+        self.momentum = momentum
+        self.weight_decay = weight_decay
+        self.num_channels = num_channels
 
 class CIFAR(Dataset):
     def __init__(self,data,label):
@@ -178,7 +187,7 @@ class InceptionSmall(nn.Module):
         x = self.fc(x)
         return x
     
-def train_loop(dataloader, model, loss_fn, optimizer,device):
+def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
     size = len(dataloader.dataset)
     # Set the model to training mode - important for batch normalization and dropout layers
     # Unnecessary in this situation but added for best practices
@@ -234,20 +243,24 @@ def test_loop(dataloader, model, loss_fn,device):
 def main():
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("random_label",type=bool)
-
+    parser.add_argument("--random_label",type=bool,default=False)
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
+    hyperparams = model_hyperparam(learning_rate=0.1,batch_size=128,epochs=5000,momentum=0.9,weight_decay=0.95,num_channels=3)
+
     plot_flags = ''
     if args.random_label:
-        plot_flags+='randomlabels'
+        plot_flags+='random_labels'
+        hyperparams.weight_decay = 1
+    else:
+        plot_flags+='true_labels'
     plotdir = (
         plot_flags
         + "_"
         + time.strftime("%m-%d-%Y_%H-%M-%S")
     )
 
-    directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
+    directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
     model_folder = 'small_inception'
     data_prefix = 'data'
     test_prefix = 'test'
@@ -284,10 +297,10 @@ def main():
         test_raw_images.append(batch_dict[b'data'])
         test_labels.append(batch_dict[b'labels'])
 
-    training_raw_images = changeDimension(training_raw_images)
-    training_labels = changeDimension(training_labels)
-    test_raw_images = changeDimension(test_raw_images)
-    test_labels = changeDimension(test_labels)
+    training_raw_images = changeDimension(training_raw_images,hyperparams.num_channels)
+    training_labels = changeDimension(training_labels,hyperparams.num_channels)
+    test_raw_images = changeDimension(test_raw_images,hyperparams.num_channels)
+    test_labels = changeDimension(test_labels,hyperparams.num_channels)
 
     training_images = preprocessing(training_raw_images)
     test_images = preprocessing(test_raw_images)
@@ -300,28 +313,28 @@ def main():
     data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
     data_test = CIFAR(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
 
-    train_dataloader = DataLoader(data_train, batch_size= batch_size,shuffle=True,num_workers=4,pin_memory=True)
-    test_dataloader = DataLoader(data_test, batch_size=batch_size,shuffle=True, num_workers=4,pin_memory=True)
+    train_dataloader = DataLoader(data_train, batch_size= hyperparams.batch_size,shuffle=True,num_workers=4,pin_memory=True)
+    test_dataloader = DataLoader(data_test, batch_size = hyperparams.batch_size,shuffle=True, num_workers=4,pin_memory=True)
 
     model = InceptionSmall(3).to(device)
     
     # model = InceptionSmall(3).to(device) # we do not specify ``weights``, i.e. create untrained model
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
 
-    optimizer = optim.SGD(model.parameters(), lr=learning_rate,momentum=momentum)
+    optimizer = optim.SGD(model.parameters(), lr = hyperparams.learning_rate,momentum = hyperparams.momentum)
     loss_fn = nn.CrossEntropyLoss()
-
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=weight_decay)
+    print('weight decay is:',hyperparams.weight_decay)
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.weight_decay)
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
 
     start_time = time.time()
 
-    for t in range(epochs):
+    for t in range(hyperparams.epochs):
         print(f"Epoch {t+1}\n-------------------------------")
 
-        train_correct, train_loss = train_loop(train_dataloader, model, loss_fn, optimizer,device)
+        train_correct, train_loss = train_loop(train_dataloader, model, loss_fn, optimizer,device,hyperparams.batch_size)
         
         test_correct, test_loss = test_loop(test_dataloader, model, loss_fn,device)
         scheduler.step()
@@ -337,10 +350,4 @@ def main():
     print("Done!")
 
 if __name__ == '__main__':
-    learning_rate = 0.1
-    batch_size = 128
-    epochs = 5000
-    momentum = 0.9
-    weight_decay = 0.95
-    num_channels = 3
     main()
