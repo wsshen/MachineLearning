@@ -1,7 +1,6 @@
 import os
 import glob
 import numpy as np
-import matplotlib.pyplot as plt
 import time
 import pickle
 
@@ -205,7 +204,7 @@ def train_loop(dataloader, model, loss_fn, optimizer,device):
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
     correct /= size
     train_loss/=num_batches
-    print(f"Tranining accuracy: {correct:>4f}")
+    print(f"Tranining accuracy: {(100*correct):>0.1f}%")
     return correct,train_loss
 
 
