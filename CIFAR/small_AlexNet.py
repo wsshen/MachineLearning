@@ -136,7 +136,7 @@ def train_loop(dataloader, model, loss_fn, optimizer,device):
     # Set the model to training mode - important for batch normalization and dropout layers
     # Unnecessary in this situation but added for best practices
     model.train()
-    train_loss = 0
+    train_loss,correct = 0,0
     num_batches = len(dataloader)
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
@@ -150,12 +150,16 @@ def train_loop(dataloader, model, loss_fn, optimizer,device):
         optimizer.step()
         optimizer.zero_grad()
         train_loss += loss.item()
+        correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
         if batch % 100 == 0:
             loss, current = loss.item(), batch * batch_size + len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+    correct /= size
     train_loss/=num_batches
-    return train_loss
+    print(f"Tranining accuracy: {(100*correct):>0.1f}%")
+
+    return correct,train_loss
 
 
 def test_loop(dataloader, model, loss_fn,device):
@@ -209,14 +213,14 @@ def main():
     training_files = glob.glob(directory+os.sep+data_prefix+'*')
     test_files = glob.glob(directory+os.sep+test_prefix+'*')
 
-    # if torch.backends.mps.is_available():
-    #     device = torch.device("mps")
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
 
-    # elif torch.cuda.is_available():
-    #     device = torch.device("cuda")
-    # else:
-    #     device = torch.device("cpu")
-    device = torch.device("cpu")
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+    # device = torch.device("cpu")
     print(device)
 
     training_raw_images = []
@@ -272,7 +276,7 @@ def main():
     for t in range(epochs):
         print(f"Epoch {t+1}\n-------------------------------")
 
-        train_loss = train_loop(train_dataloader, model, loss_fn, optimizer,device)
+        train_correct,train_loss = train_loop(train_dataloader, model, loss_fn, optimizer,device)
         
         test_correct, test_loss = test_loop(test_dataloader, model, loss_fn,device)
         scheduler.step()
@@ -284,13 +288,13 @@ def main():
         if t % 10==0:
             print(f'saving running results')
         with open(plotdir + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
-            pickle.dump([train_loss,test_correct,test_loss], file)
+            pickle.dump([train_correct,train_loss,test_correct,test_loss], file)
     print("Done!")
 
 if __name__ == '__main__':
     learning_rate = 0.01
     batch_size = 128
-    epochs = 100
+    epochs = 5000
     momentum = 0.9
     weight_decay = 0.95
     num_channels = 3
