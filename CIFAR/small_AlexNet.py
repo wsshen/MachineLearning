@@ -116,13 +116,13 @@ class AlexnetSmall(nn.Module):
 
     def forward(self, x):
         x = self.conv1(x)
-        print('conv1 done',x.shape)
+        # print('conv1 done',x.shape)
         x = self.conv2(x)
-        print('conv2 done',x.shape)
+        # print('conv2 done',x.shape)
         x = self.maxpool(x)
-        print('max pool is done',x.shape)
+        # print('max pool is done',x.shape)
         x = torch.flatten(x,1)
-        print('x dimension after flattening',x.shape)
+        # print('x dimension after flattening',x.shape)
         x = self.fc1(x)
         # print('fc1 done')
         x = self.fc2(x)
@@ -187,7 +187,7 @@ def main():
 
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
-    print(args_dict)
+    # print(args_dict)
     directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
     data_prefix = 'data'
     test_prefix = 'test'
