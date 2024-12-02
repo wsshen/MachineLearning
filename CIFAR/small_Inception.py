@@ -184,7 +184,7 @@ def train_loop(dataloader, model, loss_fn, optimizer,device):
     # Set the model to training mode - important for batch normalization and dropout layers
     # Unnecessary in this situation but added for best practices
     model.train()
-    train_loss = 0
+    train_loss,correct = 0,0
     num_batches = len(dataloader)
     for batch, (X, y) in enumerate(dataloader):
         # Compute prediction and loss
@@ -198,12 +198,15 @@ def train_loop(dataloader, model, loss_fn, optimizer,device):
         optimizer.step()
         optimizer.zero_grad()
         train_loss += loss.item()
+        correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
         if batch % 100 == 0:
             loss, current = loss.item(), batch * batch_size + len(X)
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
+    correct /= size
     train_loss/=num_batches
-    return train_loss
+    print(f"Tranining accuracy: {correct:>4f}")
+    return correct,train_loss
 
 
 def test_loop(dataloader, model, loss_fn,device):
@@ -229,11 +232,17 @@ def test_loop(dataloader, model, loss_fn,device):
     return correct,test_loss
     
 
-if __name__ == '__main__':
-    directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
+def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("random_label",type=bool)
+
+    args = parser.parse_known_args()[0]
+    args_dict = vars(args)
+
+    directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
     data_prefix = 'data'
     test_prefix = 'test'
-    num_channels = 3
 
     training_files = glob.glob(directory+os.sep+data_prefix+'*')
     test_files = glob.glob(directory+os.sep+test_prefix+'*')
@@ -270,15 +279,10 @@ if __name__ == '__main__':
     training_images = preprocessing(training_raw_images)
     test_images = preprocessing(test_raw_images)
 
-
-
-    learning_rate = 0.1
-    batch_size = 128
-    epochs = 5000
-    momentum = 0.9
-    weight_decay = 0.95
-
-
+    for arg in args_dict:
+        if arg == 'random_label' and args_dict[arg]:
+            print('shuffle labels')
+            training_labels = torch.randint(0, 10, training_labels.shape)
 
     data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
     data_test = CIFAR(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
@@ -290,7 +294,6 @@ if __name__ == '__main__':
     
     # model = InceptionSmall(3).to(device) # we do not specify ``weights``, i.e. create untrained model
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
-
 
     optimizer = optim.SGD(model.parameters(), lr=learning_rate,momentum=momentum)
     loss_fn = nn.CrossEntropyLoss()
@@ -305,7 +308,7 @@ if __name__ == '__main__':
     for t in range(epochs):
         print(f"Epoch {t+1}\n-------------------------------")
 
-        train_loss = train_loop(train_dataloader, model, loss_fn, optimizer,device)
+        train_correct, train_loss = train_loop(train_dataloader, model, loss_fn, optimizer,device)
         
         test_correct, test_loss = test_loop(test_dataloader, model, loss_fn,device)
         scheduler.step()
@@ -313,9 +316,18 @@ if __name__ == '__main__':
         elapsed_time = current_time - start_time
         print(f'elapsed time is:{elapsed_time} seconds')
         if t % 50 ==0:
-            torch.save(model.state_dict(), directory + os.sep + 'model' + os.sep + 'model_weights'+str(t)+'.pth')
+            torch.save(model.state_dict(), directory + os.sep + 'model_inception' + os.sep + 'model_weights'+str(t)+'.pth')
         if t % 10==0:
             print(f'saving running results')
-        with open(directory + os.sep + 'model' + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
-            pickle.dump([train_loss,test_correct,test_loss], file)
+        with open(directory + os.sep + 'model_inception' + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
+            pickle.dump([train_correct,train_loss,test_correct,test_loss], file)
     print("Done!")
+
+if __name__ == '__main__':
+    learning_rate = 0.1
+    batch_size = 128
+    epochs = 5000
+    momentum = 0.9
+    weight_decay = 0.95
+    num_channels = 3
+    main()
