@@ -180,12 +180,17 @@ def test_loop(dataloader, model, loss_fn,device):
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
     return correct,test_loss
     
+def main():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("random_label",type=bool)
 
-if __name__ == '__main__':
+    args = parser.parse_known_args()[0]
+    args_dict = vars(args)
+    print(args_dict)
     directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
     data_prefix = 'data'
     test_prefix = 'test'
-    num_channels = 3
 
     training_files = glob.glob(directory+os.sep+data_prefix+'*')
     test_files = glob.glob(directory+os.sep+test_prefix+'*')
@@ -223,11 +228,10 @@ if __name__ == '__main__':
     training_images = preprocessing(training_raw_images)
     test_images = preprocessing(test_raw_images)
 
-    learning_rate = 0.01
-    batch_size = 128
-    epochs = 1
-    momentum = 0.9
-    weight_decay = 0.95
+    for arg in args_dict:
+        if arg == 'random_label' and args_dict[arg]:
+            print('shuffle labels')
+            training_labels = torch.randint(0, 10, training_labels.shape) 
 
     data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
     data_test = CIFAR(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
@@ -268,3 +272,12 @@ if __name__ == '__main__':
         with open(directory + os.sep + 'model_alexnet' + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
             pickle.dump([train_loss,test_correct,test_loss], file)
     print("Done!")
+
+if __name__ == '__main__':
+    learning_rate = 0.01
+    batch_size = 128
+    epochs = 100
+    momentum = 0.9
+    weight_decay = 0.95
+    num_channels = 3
+    main()
