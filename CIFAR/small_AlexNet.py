@@ -196,23 +196,12 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--random_label",type=bool,default=False)
+    parser.add_argument("--corrupt_percentage",type=float,default=0.0)
 
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
 
     hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=5000,momentum=0.9,weight_decay=0.95,num_channels=3)
-
-    plot_flags = ''
-    if args.random_label:
-        plot_flags+='random_labels'
-        hyperparams.weight_decay = 1
-    else:
-        plot_flags+='true_labels'
-    plotdir = (
-        plot_flags
-        + "_"
-        + time.strftime("%m-%d-%Y_%H-%M-%S")
-    )
 
     directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
     model_folder = 'small_alexnet'
@@ -227,19 +216,8 @@ def main():
     training_files = glob.glob(directory+os.sep+data_prefix+'*')
     test_files = glob.glob(directory+os.sep+test_prefix+'*')
 
-    if torch.backends.mps.is_available():
-        device = torch.device("mps")
-
-    elif torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
-    # device = torch.device("cpu")
-    print(device)
-
     training_raw_images = []
     training_labels = []
-
     test_raw_images = []
     test_labels = []
 
@@ -264,6 +242,37 @@ def main():
         if arg == 'random_label' and args_dict[arg]:
             print('shuffle labels')
             training_labels = torch.randint(0, 10, training_labels.shape) 
+        if arg == 'corrupt_percentage':
+            training_labels = torch.randint(0, 10, training_labels.shape) 
+
+    plot_flags = ''
+    if args.random_label:
+        plot_flags+='random_labels'
+        hyperparams.weight_decay = 1
+    else:
+        plot_flags+='true_labels'
+    
+    if args.corrupt_percentage:
+        plot_flags+='corrupt_labels'+str(args.corrupt_percentage)
+    plotdir = (
+        plot_flags
+        + "_"
+        + time.strftime("%m-%d-%Y_%H-%M-%S")
+    )
+
+
+
+    if torch.backends.mps.is_available():
+        device = torch.device("mps")
+
+    elif torch.cuda.is_available():
+        device = torch.device("cuda")
+    else:
+        device = torch.device("cpu")
+    # device = torch.device("cpu")
+    print(device)
+
+    
 
     data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
     data_test = CIFAR(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
