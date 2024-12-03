@@ -296,6 +296,8 @@ def main():
         hyperparams.weight_decay = 1
     elif args.corrupt_percentage:
         plot_flags+='corrupt_labels_'+str(args.corrupt_percentage)
+        hyperparams.weight_decay = 1
+
     else:
         plot_flags+='true_labels'
         
