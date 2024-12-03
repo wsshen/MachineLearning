@@ -239,7 +239,7 @@ def main():
             training_labels = torch.randint(0, 10, training_labels.shape) 
         if arg == 'corrupt_percentage':
             random_indices = torch.randint(0, len(training_labels), (int(len(training_labels)*args_dict[arg]),))
-            print('Number of corrupt labels:',random_indices.shape)
+            print('Number of corrupt labels:',random_indices)
             training_labels[random_indices] = torch.randint(0, 10, (len(random_indices),)) 
 
     plot_flags = ''
