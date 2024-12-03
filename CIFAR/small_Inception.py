@@ -286,7 +286,7 @@ def main():
             print('shuffle labels')
             training_labels = torch.randint(0, 10, training_labels.shape)
         if arg == 'corrupt_percentage':
-            random_indices = torch.randint(0, len(training_labels), (int(len(training_labels)*args_dict[arg]/10),))
+            random_indices = torch.randperm(len(training_labels))[:int(len(training_labels)*args_dict[arg]/10)]
             print('Number of corrupt labels:',random_indices.shape)
             training_labels[random_indices] = torch.randint(0, 10, (len(random_indices),)) 
     
