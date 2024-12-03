@@ -88,15 +88,11 @@ class CIFAR(Dataset):
 class Conv(nn.Module):
     def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
         super(Conv, self).__init__()
-        self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.max = nn.MaxPool2d(3, stride=2,padding=0)
-        self.localnorm = nn.LocalResponseNorm(5,alpha=1e-4,beta=0.75,k=2)
+        self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding)       
         self.relu = nn.ReLU()
 
     def forward(self, x):
         x = self.conv(x)
-        x = self.max(x)
-        x = self.localnorm(x)
         x = self.relu(x)
         return x
     
@@ -111,32 +107,32 @@ class fullconnect(nn.Module):
         x = self.relu(x)
         return x
     
-class AlexnetSmall(nn.Module):
+class CNN(nn.Module):
     def __init__(self,input_channel):
-        super(AlexnetSmall, self).__init__()
-        self.conv1 = Conv(input_channel,128,5,1,2)
-        self.conv2 = Conv(128,256,5,1,2)
-        self.maxpool = nn.MaxPool2d(3, stride=2)
+        super(CNN, self).__init__()
+        self.conv1 = Conv(input_channel,32,3,1,1)
+        self.conv2 = Conv(32,64,3,1,1)
+        self.conv3 = Conv(64,128,3,1,1)
+        self.conv4 = Conv(128,128,3,1,1)
 
-        self.fc1 = fullconnect(1024,384)
-        self.fc2 = fullconnect(384,192)
-        self.fc3 = nn.Linear(192, 10)  # 10-way classification
+        self.fc1 = nn.Linear(3200,1024)
+        self.fc2 = nn.Linear(1024,2)
 
     def forward(self, x):
         x = self.conv1(x)
         # print('conv1 done',x.shape)
         x = self.conv2(x)
         # print('conv2 done',x.shape)
-        x = self.maxpool(x)
-        # print('max pool is done',x.shape)
-        x = torch.flatten(x,1)
-        # print('x dimension after flattening',x.shape)
+        x = self.conv3(x)
+        # print('conv3 done',x.shape)
+        x = self.conv4(x)
+        # print('conv4 done',x.shape)
+
         x = self.fc1(x)
         # print('fc1 done')
         x = self.fc2(x)
         # print('fc2 done')
-        x = self.fc3(x)
-        # print('fc3 done')
+
         return x
     
 def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
@@ -203,8 +199,8 @@ def main():
 
     hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=5000,momentum=0.9,weight_decay=0.95,num_channels=3)
 
-    directory = '/Users/shenwang/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
-    model_folder = 'small_alexnet'
+    directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
+    model_folder = 'cnn_Xu2023'
     data_prefix = 'data'
     test_prefix = 'test'
 
@@ -281,7 +277,7 @@ def main():
     train_dataloader = DataLoader(data_train, batch_size= hyperparams.batch_size,shuffle=True,num_workers=4,pin_memory=True)
     test_dataloader = DataLoader(data_test, batch_size=hyperparams.batch_size,shuffle=True, num_workers=4,pin_memory=True)
 
-    model = AlexnetSmall(3).to(device)
+    model = CNN(3).to(device)
     
     # model = InceptionSmall(3).to(device) # we do not specify ``weights``, i.e. create untrained model
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
