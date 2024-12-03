@@ -203,7 +203,7 @@ def main():
 
     hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=5000,momentum=0.9,weight_decay=0.95,num_channels=3)
 
-    directory = '/om2/user/shenwang/deeplearning/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
+    directory = '/om2/user/shenwang/deeplearning/CIFAR/cifar-10-python/cifar-10-batches-py'
     model_folder = 'small_alexnet'
     data_prefix = 'data'
     test_prefix = 'test'
