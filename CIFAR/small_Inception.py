@@ -244,14 +244,14 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--random_label",type=bool,default=False)
-    parser.add_argument("--corrupt_percentage",type=float,default=0.0)
+    parser.add_argument("--corrupt_percentage",type=int,default=0)
 
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
 
     hyperparams = model_hyperparam(learning_rate=0.1,batch_size=128,epochs=5000,momentum=0.9,weight_decay=0.95,num_channels=3)
     
-    directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
+    directory = '/om2/user/shenwang/deeplearning/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
     model_folder = 'small_inception'
     data_prefix = 'data'
     test_prefix = 'test'
@@ -286,7 +286,7 @@ def main():
             print('shuffle labels')
             training_labels = torch.randint(0, 10, training_labels.shape)
         if arg == 'corrupt_percentage':
-            random_indices = torch.randint(0, len(training_labels), (int(len(training_labels)*args_dict[arg]),))
+            random_indices = torch.randint(0, len(training_labels), (int(len(training_labels)*args_dict[arg]/10),))
             print('Number of corrupt labels:',random_indices.shape)
             training_labels[random_indices] = torch.randint(0, 10, (len(random_indices),)) 
     
@@ -295,7 +295,7 @@ def main():
         plot_flags+='random_labels'
         hyperparams.weight_decay = 1
     elif args.corrupt_percentage:
-        plot_flags+='corrupt_labels_'+str(args.corrupt_percentage)
+        plot_flags+='corrupt_labels_'+str(args.corrupt_percentage*10)
         hyperparams.weight_decay = 1
 
     else:
