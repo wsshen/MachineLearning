@@ -66,12 +66,12 @@ def preprocessing(x,c_x=28,c_y=28,normalize=True,center_crop=True,whitening=True
     return new_x
 
 class model_hyperparam(object):
-    def __init__(self,learning_rate,batch_size,epochs,momentum,weight_decay,num_channels):
+    def __init__(self,learning_rate,batch_size,epochs,momentum,decay_factor,num_channels):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epochs = epochs
         self.momentum = momentum
-        self.weight_decay = weight_decay
+        self.decay_factor = decay_factor
         self.num_channels = num_channels
 class CIFAR(Dataset):
     def __init__(self,data,label):
@@ -104,19 +104,19 @@ class CNN(nn.Module):
         self.conv2 = Conv(600,600,2,1,0)
         self.conv3 = Conv(600,600,2,1,0)
 
-        self.fc = nn.Linear(3200,10)
+        self.fc = nn.Linear(375000,10)
 
     def forward(self, x):
         x = self.conv1(x)
-        print('conv1 done',x.shape)
+        # print('conv1 done',x.shape)
         x = self.conv2(x)
-        print('conv2 done',x.shape)
+        # print('conv2 done',x.shape)
         x = self.conv3(x)
-        print('conv3 done',x.shape)
-
-
+        # print('conv3 done',x.shape)
+        x = torch.flatten(x, 1)
+        # print('after flattening',x.shape)
         x = self.fc(x)
-        print('fc done')
+        # print('fc done')
 
 
         return x
@@ -183,7 +183,7 @@ def main():
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
 
-    hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=500,momentum=0.9,weight_decay=0.95,num_channels=3)
+    hyperparams = model_hyperparam(learning_rate=0.01,batch_size=64,epochs=500,momentum=0.9,decay_factor=0.1,num_channels=3)
 
     directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
     model_folder = 'cnn_Xu2023'
@@ -226,10 +226,8 @@ def main():
     plot_flags = ''
     if args.random_label:
         plot_flags+='random_labels'
-        hyperparams.weight_decay = 1
     elif args.corrupt_percentage:
         plot_flags+='corrupt_labels_'+str(args.corrupt_percentage)
-        hyperparams.weight_decay = 1
     else:
         plot_flags+='true_labels'
     
@@ -269,12 +267,9 @@ def main():
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
 
 
-    optimizer = optim.SGD(model.parameters(), lr=hyperparams.learning_rate,momentum=hyperparams.momentum)
+    optimizer = optim.SGD(model.parameters(), lr=hyperparams.learning_rate,momentum=hyperparams.momentum,weight_decay=3e-3)
     loss_fn = nn.CrossEntropyLoss()
-    print('weight decay is:',hyperparams.weight_decay)
-
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.weight_decay)
-
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60,100,300], gamma=hyperparams.decay_factor)
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
 
