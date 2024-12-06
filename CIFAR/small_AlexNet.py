@@ -66,12 +66,12 @@ def preprocessing(x,c_x=28,c_y=28,normalize=True,center_crop=True,whitening=True
     return new_x
 
 class model_hyperparam(object):
-    def __init__(self,learning_rate,batch_size,epochs,momentum,weight_decay,num_channels):
+    def __init__(self,learning_rate,batch_size,epochs,momentum,decay_factor,num_channels):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epochs = epochs
         self.momentum = momentum
-        self.weight_decay = weight_decay
+        self.decay_factor = decay_factor
         self.num_channels = num_channels
 class CIFAR(Dataset):
     def __init__(self,data,label):
@@ -213,7 +213,7 @@ def main():
     args_dict = vars(args)
     print(args,args_dict)
 
-    hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=5000,momentum=0.9,weight_decay=0.95,num_channels=3)
+    hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=5000,momentum=0.9,decay_factor=0.95,num_channels=3)
 
     directory = '/om2/user/shenwang/deeplearning/CIFAR/cifar-10-python/cifar-10-batches-py'
     model_folder = 'small_alexnet'
@@ -261,10 +261,10 @@ def main():
     plot_flags = ''
     if args.random_label:
         plot_flags+='random_labels'
-        hyperparams.weight_decay = 1
+        hyperparams.decay_factor = 1
     elif args.corrupt_percentage:
         plot_flags+='corrupt_labels_'+str(args.corrupt_percentage*10)
-        hyperparams.weight_decay = 1
+        hyperparams.decay_factor = 1
     else:
         plot_flags+='true_labels'
     
@@ -302,9 +302,9 @@ def main():
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
 
     optimizer = optim.SGD(model.parameters(), lr=hyperparams.learning_rate,momentum=hyperparams.momentum)
-    print('weight decay is:',hyperparams.weight_decay)
+    print('weight decay is:',hyperparams.decay_factor)
 
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.weight_decay)
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.decay_factor)
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
