@@ -309,10 +309,8 @@ def main():
     plot_flags = ''
     if args.random_label:
         plot_flags+='random_labels'
-        hyperparams.decay_factor = 1
     elif args.corrupt_percentage:
         plot_flags+='corrupt_labels_'+str(args.corrupt_percentage*10)
-        hyperparams.decay_factor = 1
     else:
         plot_flags+='true_labels'
         
@@ -350,7 +348,6 @@ def main():
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
 
     optimizer = optim.SGD(model.parameters(), lr = hyperparams.learning_rate,momentum = hyperparams.momentum)
-    print('weight decay is:',hyperparams.decay_factor)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.decay_factor)
 
     total_params = sum(p.numel() for p in model.parameters())
