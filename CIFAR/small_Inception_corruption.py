@@ -185,6 +185,7 @@ class InceptionSmall(nn.Module):
         # print(x.shape)
         x = torch.flatten(x, 1)
         x = self.fc(x)
+        # print('fc done',x.shape)
         return x
     
 def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
@@ -199,7 +200,13 @@ def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
         # print(batch,X.shape,y.shape)
         X,y = X.to(device),y.to(device)
         pred = model(X)
-        loss = loss_fn(pred, y)
+        if isinstance(loss_fn,nn.modules.loss.MSELoss):
+            y_new = F.one_hot(y,num_classes=10).float()
+        else:
+            y_new = y
+        print('size of pred is:',pred.shape)
+        print('size of y is:',y_new.shape)
+        loss = loss_fn(pred, y_new)
 
         # Backpropagation
         loss.backward()
@@ -231,7 +238,11 @@ def test_loop(dataloader, model, loss_fn,device):
         for X, y in dataloader:
             X,y = X.to(device),y.to(device)
             pred = model(X)
-            test_loss += loss_fn(pred, y).item()
+            if isinstance(loss_fn,nn.modules.loss.MSELoss):
+                y_new = F.one_hot(y,num_classes=10).float()
+            else:
+                y_new = y
+            test_loss += loss_fn(pred, y_new).item()
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
     test_loss /= num_batches
@@ -245,10 +256,11 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--random_label",type=bool,default=False)
     parser.add_argument("--corrupt_percentage",type=int,default=0)
+    parser.add_argument("--loss_function",type=str,default='cross_entropy')
 
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
-
+    print(args,args_dict)
     hyperparams = model_hyperparam(learning_rate=0.1,batch_size=128,epochs=5000,momentum=0.9,weight_decay=0.95,num_channels=3)
     
     directory = '/om2/user/shenwang/deeplearning/CIFAR/cifar-10-python/cifar-10-batches-py'
@@ -289,6 +301,10 @@ def main():
             random_indices = torch.randperm(len(training_labels))[:int(len(training_labels)*args_dict[arg]/10)]
             print('Number of corrupt labels:',random_indices.shape)
             training_labels[random_indices] = torch.randint(0, 10, (len(random_indices),)) 
+        if arg == 'loss_function' and args_dict[arg] == 'mse':
+            loss_fn = nn.MSELoss()
+        if arg == 'loss_function' and args_dict[arg] == 'cross_entropy':
+            loss_fn = nn.CrossEntropyLoss()
     
     plot_flags = ''
     if args.random_label:
@@ -297,7 +313,6 @@ def main():
     elif args.corrupt_percentage:
         plot_flags+='corrupt_labels_'+str(args.corrupt_percentage*10)
         hyperparams.weight_decay = 1
-
     else:
         plot_flags+='true_labels'
         
@@ -306,6 +321,7 @@ def main():
         + "_"
         + time.strftime("%m-%d-%Y_%H-%M-%S")
     )
+
     
     plotdir = os.path.join(directory, model_folder, plotdir)
     args.plot_dir = plotdir
@@ -334,12 +350,14 @@ def main():
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
 
     optimizer = optim.SGD(model.parameters(), lr = hyperparams.learning_rate,momentum = hyperparams.momentum)
-    loss_fn = nn.CrossEntropyLoss()
     print('weight decay is:',hyperparams.weight_decay)
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.weight_decay)
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
+
+    with open(plotdir + os.sep + 'arguments.pkl', 'wb') as file:
+        pickle.dump([args_dict], file)
 
     start_time = time.time()
 
