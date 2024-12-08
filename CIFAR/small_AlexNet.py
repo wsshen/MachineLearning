@@ -322,7 +322,11 @@ def main():
         elapsed_time = current_time - start_time
         print(f'elapsed time is:{elapsed_time} seconds')
         if t % 50 ==0:
-            torch.save(model.state_dict(), plotdir + os.sep + 'model_weights'+str(t)+'.pth')
+            torch.save({
+            'epoch': t,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            }, plotdir + os.sep + 'model_weights'+str(t)+'.pth')
         if t % 10==0:
             print(f'saving running results')
         with open(plotdir + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
