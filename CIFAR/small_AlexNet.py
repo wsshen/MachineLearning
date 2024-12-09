@@ -327,8 +327,10 @@ def main():
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             }, plotdir + os.sep + 'model_weights'+str(t)+'.pth')
+        
         if t % 10==0:
             print(f'saving running results')
+        
         with open(plotdir + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
             pickle.dump([train_correct,train_loss,test_correct,test_loss], file)
     print("Done!")

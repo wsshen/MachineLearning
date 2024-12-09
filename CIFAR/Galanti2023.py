@@ -100,11 +100,11 @@ class Conv(nn.Module):
 class CNN(nn.Module):
     def __init__(self,input_channel):
         super(CNN, self).__init__()
-        self.conv1 = Conv(input_channel,600,2,1,0)
-        self.conv2 = Conv(600,600,2,1,0)
-        self.conv3 = Conv(600,600,2,1,0)
+        self.conv1 = Conv(input_channel,200,2,1,0)
+        self.conv2 = Conv(200,200,2,1,0)
+        self.conv3 = Conv(200,200,2,1,0)
 
-        self.fc = nn.Linear(375000,10)
+        self.fc = nn.Linear(125000,10)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -133,8 +133,11 @@ def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
         # print(batch,X.shape,y.shape)
         X,y = X.to(device),y.to(device)
         pred = model(X)
-        loss = loss_fn(pred, y)
-
+        if isinstance(loss_fn,nn.modules.loss.MSELoss):
+            y_new = F.one_hot(y,num_classes=10).float()
+        else:
+            y_new = y
+        loss = loss_fn(pred, y_new)
         # Backpropagation
         loss.backward()
         optimizer.step()
@@ -166,7 +169,14 @@ def test_loop(dataloader, model, loss_fn,device):
         for X, y in dataloader:
             X,y = X.to(device),y.to(device)
             pred = model(X)
-            test_loss += loss_fn(pred, y).item()
+
+            if isinstance(loss_fn,nn.modules.loss.MSELoss):
+                y_new = F.one_hot(y,num_classes=10).float()
+            else:
+                y_new = y
+
+            test_loss += loss_fn(pred, y_new).item()
+
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
     test_loss /= num_batches
@@ -182,11 +192,12 @@ def main():
 
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
+    print(args,args_dict)
 
     hyperparams = model_hyperparam(learning_rate=0.01,batch_size=64,epochs=500,momentum=0.9,decay_factor=0.1,num_channels=3)
 
     directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
-    model_folder = 'cnn_Xu2023'
+    model_folder = 'Galanti2023'
     data_prefix = 'data'
     test_prefix = 'test'
 
@@ -268,7 +279,7 @@ def main():
 
 
     optimizer = optim.SGD(model.parameters(), lr=hyperparams.learning_rate,momentum=hyperparams.momentum,weight_decay=3e-3)
-    loss_fn = nn.CrossEntropyLoss()
+    loss_fn = nn.MSELoss()
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=[60,100,300], gamma=hyperparams.decay_factor)
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
@@ -286,9 +297,15 @@ def main():
         elapsed_time = current_time - start_time
         print(f'elapsed time is:{elapsed_time} seconds')
         if t % 50 ==0:
-            torch.save(model.state_dict(), plotdir + os.sep + 'model_weights'+str(t)+'.pth')
+            torch.save({
+            'epoch': t,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            }, plotdir + os.sep + 'model_weights'+str(t)+'.pth')
+
         if t % 10==0:
             print(f'saving running results')
+
         with open(plotdir + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
             pickle.dump([train_correct,train_loss,test_correct,test_loss], file)
     print("Done!")

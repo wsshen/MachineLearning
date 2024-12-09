@@ -66,13 +66,14 @@ def preprocessing(x,c_x=28,c_y=28,normalize=True,center_crop=True,whitening=True
     return new_x
 
 class model_hyperparam(object):
-    def __init__(self,learning_rate,batch_size,epochs,momentum,weight_decay,num_channels):
+    def __init__(self,learning_rate,batch_size,epochs,momentum,decay_factor,num_channels,weight_decay):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epochs = epochs
         self.momentum = momentum
-        self.weight_decay = weight_decay
+        self.decay_factor = decay_factor
         self.num_channels = num_channels
+        self.weight_decay = weight_decay
 class CIFAR(Dataset):
     def __init__(self,data,label):
         super(CIFAR,self).__init__()
@@ -96,27 +97,15 @@ class Conv(nn.Module):
         x = self.relu(x)
         return x
     
-class fullconnect(nn.Module):
-    def __init__(self,input_channel,output_channel):
-        super(fullconnect, self).__init__()
-        self.fc = nn.Linear(input_channel,output_channel)
-        self.relu = nn.ReLU()
-
-    def forward(self, x):
-        x = self.fc(x)
-        x = self.relu(x)
-        return x
     
 class CNN(nn.Module):
     def __init__(self,input_channel):
         super(CNN, self).__init__()
-        self.conv1 = Conv(input_channel,32,3,1,1)
-        self.conv2 = Conv(32,64,3,1,1)
-        self.conv3 = Conv(64,128,3,1,1)
-        self.conv4 = Conv(128,128,3,1,1)
+        self.conv1 = Conv(input_channel,128,3,1,0)
+        self.conv2 = Conv(128,144,3,1,0)
+        self.conv3 = Conv(144,96,3,1,0)
 
-        self.fc1 = nn.Linear(3200,1024)
-        self.fc2 = nn.Linear(1024,2)
+        self.fc = nn.Linear(46464,10)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -125,13 +114,11 @@ class CNN(nn.Module):
         # print('conv2 done',x.shape)
         x = self.conv3(x)
         # print('conv3 done',x.shape)
-        x = self.conv4(x)
-        # print('conv4 done',x.shape)
+        x = torch.flatten(x, 1)
+        # print('after flattening',x.shape)
+        x = self.fc(x)
+        # print('fc done')
 
-        x = self.fc1(x)
-        # print('fc1 done')
-        x = self.fc2(x)
-        # print('fc2 done')
 
         return x
     
@@ -147,8 +134,11 @@ def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
         # print(batch,X.shape,y.shape)
         X,y = X.to(device),y.to(device)
         pred = model(X)
-        loss = loss_fn(pred, y)
-
+        if isinstance(loss_fn,nn.modules.loss.MSELoss):
+            y_new = F.one_hot(y,num_classes=10).float()
+        else:
+            y_new = y
+        loss = loss_fn(pred, y_new)
         # Backpropagation
         loss.backward()
         optimizer.step()
@@ -180,7 +170,14 @@ def test_loop(dataloader, model, loss_fn,device):
         for X, y in dataloader:
             X,y = X.to(device),y.to(device)
             pred = model(X)
-            test_loss += loss_fn(pred, y).item()
+
+            if isinstance(loss_fn,nn.modules.loss.MSELoss):
+                y_new = F.one_hot(y,num_classes=10).float()
+            else:
+                y_new = y
+
+            test_loss += loss_fn(pred, y_new).item()
+
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
     test_loss /= num_batches
@@ -196,11 +193,12 @@ def main():
 
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
+    print(args,args_dict)
 
-    hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=5000,momentum=0.9,weight_decay=0.95,num_channels=3)
+    hyperparams = model_hyperparam(learning_rate=0.03,batch_size=128,epochs=5000,momentum=0.9,decay_factor=0.1,num_channels=3,weight_decay=1e-3)
 
     directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
-    model_folder = 'cnn_Xu2023'
+    model_folder = 'Galanti2023'
     data_prefix = 'data'
     test_prefix = 'test'
 
@@ -240,10 +238,8 @@ def main():
     plot_flags = ''
     if args.random_label:
         plot_flags+='random_labels'
-        hyperparams.weight_decay = 1
     elif args.corrupt_percentage:
         plot_flags+='corrupt_labels_'+str(args.corrupt_percentage)
-        hyperparams.weight_decay = 1
     else:
         plot_flags+='true_labels'
     
@@ -283,12 +279,10 @@ def main():
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
 
 
-    optimizer = optim.SGD(model.parameters(), lr=hyperparams.learning_rate,momentum=hyperparams.momentum)
-    loss_fn = nn.CrossEntropyLoss()
-    print('weight decay is:',hyperparams.weight_decay)
+    optimizer = optim.SGD(model.parameters(), lr=hyperparams.learning_rate,momentum=hyperparams.momentum,weight_decay=hyperparams.weight_decay)
+    loss_fn = nn.MSELoss()
 
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.weight_decay)
-
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=10)
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
 
@@ -305,9 +299,15 @@ def main():
         elapsed_time = current_time - start_time
         print(f'elapsed time is:{elapsed_time} seconds')
         if t % 50 ==0:
-            torch.save(model.state_dict(), plotdir + os.sep + 'model_weights'+str(t)+'.pth')
+            torch.save({
+            'epoch': t,
+            'model_state_dict': model.state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            }, plotdir + os.sep + 'model_weights'+str(t)+'.pth')
+
         if t % 10==0:
             print(f'saving running results')
+
         with open(plotdir + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
             pickle.dump([train_correct,train_loss,test_correct,test_loss], file)
     print("Done!")
