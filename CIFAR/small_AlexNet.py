@@ -73,6 +73,7 @@ class model_hyperparam(object):
         self.momentum = momentum
         self.decay_factor = decay_factor
         self.num_channels = num_channels
+        
 class CIFAR(Dataset):
     def __init__(self,data,label):
         super(CIFAR,self).__init__()
@@ -169,7 +170,7 @@ def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
     correct /= size
     train_loss/=num_batches
-    print(f"Tranining accuracy: {(100*correct):>0.1f}%")
+    print(f"Training accuracy: {(100*correct):>0.1f}%")
 
     return correct,train_loss
 

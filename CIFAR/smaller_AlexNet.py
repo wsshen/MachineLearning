@@ -73,7 +73,7 @@ class model_hyperparam(object):
         self.momentum = momentum
         self.decay_factor = decay_factor
         self.num_channels = num_channels
-
+        
 class CIFAR(Dataset):
     def __init__(self,data,label):
         super(CIFAR,self).__init__()
@@ -90,102 +90,53 @@ class Conv(nn.Module):
     def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
         super(Conv, self).__init__()
         self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding)
-        self.batchnorm = nn.BatchNorm2d(output_channel) 
+        self.max = nn.MaxPool2d(3, stride=2,padding=0)
+        # self.localnorm = nn.LocalResponseNorm(5,alpha=1e-4,beta=0.75,k=2)
         self.relu = nn.ReLU()
 
     def forward(self, x):
         x = self.conv(x)
-        x = self.batchnorm(x)
+        x = self.max(x)
+        # x = self.localnorm(x)
         x = self.relu(x)
         return x
     
-class Inception(nn.Module):
-    def __init__(self, input_channel, output1, output3):
-        super(Inception,self).__init__()
-        self.branch1 = Conv(input_channel, output1, 1, 1,padding=0)
-        self.branch3 = Conv(input_channel, output3, 3, 1,padding=1)
+class fullconnect(nn.Module):
+    def __init__(self,input_channel,output_channel):
+        super(fullconnect, self).__init__()
+        self.fc = nn.Linear(input_channel,output_channel)
+        self.relu = nn.ReLU()
 
     def forward(self, x):
-        b1 = self.branch1(x)  
-        b3 = self.branch3(x) 
-        # print(b1.shape,b3.shape)
-        # Concatenate along the channel dimension
-        return torch.cat([b1, b3], dim=1)
-
-class Downsample(nn.Module):
-    def __init__(self, input_channel, output_channel):
-        super(Downsample,self).__init__()
-        self.branch_conv = Conv(input_channel, output_channel, 3, 2,padding=1)
-        self.branch_pool = nn.MaxPool2d(3, stride=2,padding=1)
-
-    def forward(self, x):
-        b_conv = self.branch_conv(x)  
-        b_pool = self.branch_pool(x) 
-        # print(b_conv.shape,b_pool.shape)
-        # Concatenate along the channel dimension
-        return torch.cat([b_conv, b_pool], dim=1)
-
-class InceptionSmall(nn.Module):
-    def __init__(self,input_channel):
-        super(InceptionSmall, self).__init__()
-        self.initial_conv = Conv(input_channel, 96, 3, 1,1)  
-
-        # First Inception Block
-        self.inception1 = Inception(96, 32, 32)
-        self.inception2 = Inception(64, 32, 48)
-        self.downsample1 = Downsample(80, 80)
-
-        # Second Inception Block
-        self.inception3 = Inception(160, 112, 48)
-        self.inception4 = Inception(160, 96, 64)
-        self.inception5 = Inception(160, 80, 80)
-        self.inception6 = Inception(160, 48, 96)
-        self.downsample2 = Downsample(144, 96)
-
-        # Final Inception Block
-        self.inception7 = Inception(240, 176, 160)
-        self.inception8 = Inception(336, 176, 160)
-
-        # Classification Head
-        self.global_pool = nn.AvgPool2d(7)  # 7x7 kernel global pooling
-        self.fc = nn.Linear(336, 10)  # 10-way classification
-
-    def forward(self, x):
-        x = self.initial_conv(x)
-        # print('initial_conv done')
-        x = self.inception1(x)
-        # print('inception1 done')
-        x = self.inception2(x)
-        # print('inception2 done')
-
-        x = self.downsample1(x)
-        # print('downsample1 done')
-        x = self.inception3(x)
-        # print('inception3 done')
-
-        x = self.inception4(x)
-        # print('inception4 done')
-
-        x = self.inception5(x)
-        # print('inception5 done')
-
-        x = self.inception6(x)
-        # print('inception6 done')
-
-        x = self.downsample2(x)
-        # print('downsample2 done',x.shape)
-        x = self.inception7(x)
-        # print('inception7 done')
-
-        x = self.inception8(x)
-        # print('inception8 done')
-
-        x = self.global_pool(x)
-        # print('global_pool done')
-        # print(x.shape)
-        x = torch.flatten(x, 1)
         x = self.fc(x)
-        # print('fc done',x.shape)
+        x = self.relu(x)
+        return x
+    
+class AlexnetSmall(nn.Module):
+    def __init__(self,input_channel):
+        super(AlexnetSmall, self).__init__()
+        self.conv1 = Conv(input_channel,128,5,1,2)
+        self.conv2 = Conv(128,256,5,1,2)
+        self.maxpool = nn.MaxPool2d(3, stride=2)
+
+        # self.fc1 = fullconnect(1024,384)
+
+        self.fc1 = nn.Linear(1024, 10)  # 10-way classification
+
+    def forward(self, x):
+        x = self.conv1(x)
+        # print('conv1 done',x.shape)
+        x = self.conv2(x)
+        # print('conv2 done',x.shape)
+        x = self.maxpool(x)
+        # print('max pool is done',x.shape)
+        x = torch.flatten(x,1)
+        # print('x dimension after flattening',x.shape)
+        x = self.fc1(x)
+        # print('fc1 done')
+        # x = self.fc2(x)
+        # print('fc2 done')
+        # print('fc3 done',x.shape)
         return x
     
 def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
@@ -204,15 +155,13 @@ def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
             y_new = F.one_hot(y,num_classes=10).float()
         else:
             y_new = y
-        # print('size of pred is:',pred.shape)
-        # print('size of y is:',y_new.shape)
         loss = loss_fn(pred, y_new)
-
         # Backpropagation
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
         train_loss += loss.item()
+
         correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
         if batch % 100 == 0:
@@ -221,6 +170,7 @@ def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
     correct /= size
     train_loss/=num_batches
     print(f"Training accuracy: {(100*correct):>0.1f}%")
+
     return correct,train_loss
 
 
@@ -238,10 +188,12 @@ def test_loop(dataloader, model, loss_fn,device):
         for X, y in dataloader:
             X,y = X.to(device),y.to(device)
             pred = model(X)
+
             if isinstance(loss_fn,nn.modules.loss.MSELoss):
                 y_new = F.one_hot(y,num_classes=10).float()
             else:
                 y_new = y
+
             test_loss += loss_fn(pred, y_new).item()
             correct += (pred.argmax(1) == y).type(torch.float).sum().item()
 
@@ -250,7 +202,6 @@ def test_loop(dataloader, model, loss_fn,device):
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
     return correct,test_loss
     
-
 def main():
     import argparse
     parser = argparse.ArgumentParser()
@@ -261,10 +212,11 @@ def main():
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
     print(args,args_dict)
-    hyperparams = model_hyperparam(learning_rate=0.1,batch_size=128,epochs=5000,momentum=0.9,decay_factor=0.95,num_channels=3)
-    
+
+    hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=5000,momentum=0.9,decay_factor=0.95,num_channels=3)
+
     directory = '/om2/user/shenwang/deeplearning/CIFAR/cifar-10-python/cifar-10-batches-py'
-    model_folder = 'small_inception'
+    model_folder = 'small_alexnet'
     data_prefix = 'data'
     test_prefix = 'test'
 
@@ -296,7 +248,7 @@ def main():
     for arg in args_dict:
         if arg == 'random_label' and args_dict[arg]:
             print('shuffle labels')
-            training_labels = torch.randint(0, 10, training_labels.shape)
+            training_labels = torch.randint(0, 10, training_labels.shape) 
         if arg == 'corrupt_percentage':
             random_indices = torch.randperm(len(training_labels))[:int(len(training_labels)*args_dict[arg]/10)]
             print('Number of corrupt labels:',random_indices.shape)
@@ -305,7 +257,7 @@ def main():
             loss_fn = nn.MSELoss()
         if arg == 'loss_function' and args_dict[arg] == 'cross_entropy':
             loss_fn = nn.CrossEntropyLoss()
-    
+
     plot_flags = ''
     if args.random_label:
         plot_flags+='random_labels'
@@ -313,6 +265,7 @@ def main():
         plot_flags+='corrupt_labels_'+str(args.corrupt_percentage*10)
     else:
         plot_flags+='true_labels'
+    
         
     plotdir = (
         plot_flags
@@ -320,7 +273,6 @@ def main():
         + time.strftime("%m-%d-%Y_%H-%M-%S")
     )
 
-    
     plotdir = os.path.join(directory, model_folder, plotdir)
     args.plot_dir = plotdir
     if not (os.path.exists(plotdir)):
@@ -333,21 +285,22 @@ def main():
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
+    # device = torch.device("cpu")
     print(device)
-
 
     data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
     data_test = CIFAR(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
 
     train_dataloader = DataLoader(data_train, batch_size= hyperparams.batch_size,shuffle=True,num_workers=4,pin_memory=True)
-    test_dataloader = DataLoader(data_test, batch_size = hyperparams.batch_size,shuffle=True, num_workers=4,pin_memory=True)
+    test_dataloader = DataLoader(data_test, batch_size=hyperparams.batch_size,shuffle=True, num_workers=4,pin_memory=True)
 
-    model = InceptionSmall(3).to(device)
+    model = AlexnetSmall(3).to(device)
     
     # model = InceptionSmall(3).to(device) # we do not specify ``weights``, i.e. create untrained model
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
 
-    optimizer = optim.SGD(model.parameters(), lr = hyperparams.learning_rate,momentum = hyperparams.momentum)
+    optimizer = optim.SGD(model.parameters(), lr=hyperparams.learning_rate,momentum=hyperparams.momentum)
+
     scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.decay_factor)
 
     total_params = sum(p.numel() for p in model.parameters())
@@ -361,7 +314,7 @@ def main():
     for t in range(hyperparams.epochs):
         print(f"Epoch {t+1}\n-------------------------------")
 
-        train_correct, train_loss = train_loop(train_dataloader, model, loss_fn, optimizer,device,hyperparams.batch_size)
+        train_correct,train_loss = train_loop(train_dataloader, model, loss_fn, optimizer,device,hyperparams.batch_size)
         
         test_correct, test_loss = test_loop(test_dataloader, model, loss_fn,device)
         scheduler.step()
@@ -374,8 +327,10 @@ def main():
             'model_state_dict': model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             }, plotdir + os.sep + 'model_weights'+str(t)+'.pth')
+        
         if t % 10==0:
             print(f'saving running results')
+        
         with open(plotdir + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
             pickle.dump([train_correct,train_loss,test_correct,test_loss], file)
     print("Done!")

@@ -86,10 +86,25 @@ class CIFAR(Dataset):
     def __getitem__(self, idx):
         return self.data[idx,:,:,:], self.label[idx]
     
+class ConvPool(nn.Module):
+    def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
+        super(ConvPool, self).__init__()
+        self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding,bias=False)  
+        self.max = nn.MaxPool2d(3, stride=2,padding=0)
+        # self.batchnorm = nn.BatchNorm2d(output_channel)    
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.max(x)
+        # x = self.batchnorm(x)
+        x = self.relu(x)
+        return x
+    
 class Conv(nn.Module):
     def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
         super(Conv, self).__init__()
-        self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding)       
+        self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding,bias=False)  
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -97,15 +112,17 @@ class Conv(nn.Module):
         x = self.relu(x)
         return x
     
-    
 class CNN(nn.Module):
     def __init__(self,input_channel):
         super(CNN, self).__init__()
-        self.conv1 = Conv(input_channel,128,3,1,0)
-        self.conv2 = Conv(128,144,3,1,0)
-        self.conv3 = Conv(144,96,3,1,0)
 
-        self.fc = nn.Linear(46464,10)
+        self.conv1 = Conv(input_channel,32,5,1,1)
+        self.conv2 = Conv(32,64,5,1,1)
+        self.conv3 = Conv(64,64,3,1,1)
+
+        self.maxpool = nn.MaxPool2d(3, stride=2)
+
+        self.fc = nn.Linear(7744,10)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -113,13 +130,58 @@ class CNN(nn.Module):
         x = self.conv2(x)
         # print('conv2 done',x.shape)
         x = self.conv3(x)
+
+        x = self.maxpool(x)
         # print('conv3 done',x.shape)
         x = torch.flatten(x, 1)
         # print('after flattening',x.shape)
         x = self.fc(x)
         # print('fc done')
+        return x
+    
+def weight_init(layer,scale_factor=0.1):
+    if isinstance(layer, nn.Linear):  # For fully connected layers
+        std = scale_factor * (2 / layer.in_features)**0.5
+        nn.init.normal_(layer.weight, mean=0, std=std)
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
+    elif isinstance(layer, nn.Conv2d):  # For convolutional layers
+        n_in = layer.in_channels * layer.kernel_size[0] * layer.kernel_size[1]
+        std = scale_factor * (2 / n_in)**0.5
+        nn.init.normal_(layer.weight, mean=0, std=std)
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
 
 
+class MinimalCNN(nn.Module):
+    def __init__(self, input_channel,num_classes=10):
+        super(MinimalCNN, self).__init__()
+        self.features = nn.Sequential(
+            nn.Conv2d(input_channel, 16, kernel_size=3, stride=1, padding=1, bias=False),  # Basic Conv
+            nn.BatchNorm2d(16),
+            nn.ReLU(),
+            nn.Conv2d(16, 16, kernel_size=3, stride=1, padding=1, groups=16, bias=False),  # Depthwise Conv
+            nn.Conv2d(16, 32, kernel_size=1, bias=False),  # Pointwise Conv
+            nn.BatchNorm2d(32),
+            nn.ReLU(),
+            nn.AvgPool2d(kernel_size=2),  # Downsampling
+            nn.Conv2d(32, 32, kernel_size=3, stride=1, padding=1, groups=32, bias=False),
+            nn.Conv2d(32, 64, kernel_size=1, bias=False),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.AvgPool2d(kernel_size=2),  # Downsampling
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1, groups=64, bias=False),
+            nn.Conv2d(64, 128, kernel_size=1, bias=False),
+            nn.BatchNorm2d(128),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d(1),  # Global Average Pooling
+        )
+        self.classifier = nn.Linear(128, num_classes, bias=False)
+
+    def forward(self, x):
+        x = self.features(x)
+        x = x.view(x.size(0), -1)  # Flatten
+        x = self.classifier(x)
         return x
     
 def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
@@ -151,7 +213,7 @@ def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
             print(f"loss: {loss:>7f}  [{current:>5d}/{size:>5d}]")
     correct /= size
     train_loss/=num_batches
-    print(f"Tranining accuracy: {(100*correct):>0.1f}%")
+    print(f"Training accuracy: {(100*correct):>0.1f}%")
 
     return correct,train_loss
 
@@ -189,16 +251,17 @@ def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--random_label",type=bool,default=False)
-    parser.add_argument("--corrupt_percentage",type=float,default=0.0)
+    parser.add_argument("--corrupt_percentage",type=int,default=0)
+    parser.add_argument("--loss_function",type=str,default='cross_entropy')
 
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
     print(args,args_dict)
 
-    hyperparams = model_hyperparam(learning_rate=0.03,batch_size=128,epochs=5000,momentum=0.9,decay_factor=0.1,num_channels=3,weight_decay=1e-3)
+    hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=5000,momentum=0.9,decay_factor=0.95,num_channels=3,weight_decay=1e-3)
 
     directory = '/home/watson/Documents/CIFAR/cifar-10-python/cifar-10-batches-py'
-    model_folder = 'Galanti2023'
+    model_folder = 'cnn_Xu2023'
     data_prefix = 'data'
     test_prefix = 'test'
 
@@ -234,6 +297,10 @@ def main():
         if arg == 'corrupt_percentage':
             random_indices = torch.randint(0, len(training_labels), (len(training_labels*args_dict[arg]),))
             training_labels[random_indices] = torch.randint(0, 10, (len(random_indices),)) 
+        if arg == 'loss_function' and args_dict[arg] == 'mse':
+            loss_fn = nn.MSELoss()
+        if arg == 'loss_function' and args_dict[arg] == 'cross_entropy':
+            loss_fn = nn.CrossEntropyLoss()
 
     plot_flags = ''
     if args.random_label:
@@ -274,18 +341,21 @@ def main():
     test_dataloader = DataLoader(data_test, batch_size=hyperparams.batch_size,shuffle=True, num_workers=4,pin_memory=True)
 
     model = CNN(3).to(device)
-    
+    model.apply(weight_init)
     # model = InceptionSmall(3).to(device) # we do not specify ``weights``, i.e. create untrained model
     # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
 
 
     optimizer = optim.SGD(model.parameters(), lr=hyperparams.learning_rate,momentum=hyperparams.momentum,weight_decay=hyperparams.weight_decay)
-    loss_fn = nn.MSELoss()
+    # loss_fn = nn.MSELoss()
 
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=10)
+    # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=10)
+    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.decay_factor)
+
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
-
+    with open(plotdir + os.sep + 'arguments.pkl', 'wb') as file:
+        pickle.dump([args_dict], file)
     start_time = time.time()
 
     for t in range(hyperparams.epochs):
@@ -294,7 +364,7 @@ def main():
         train_correct,train_loss = train_loop(train_dataloader, model, loss_fn, optimizer,device,hyperparams.batch_size)
         
         test_correct, test_loss = test_loop(test_dataloader, model, loss_fn,device)
-        scheduler.step()
+        # scheduler.step()
         current_time = time.time()
         elapsed_time = current_time - start_time
         print(f'elapsed time is:{elapsed_time} seconds')
