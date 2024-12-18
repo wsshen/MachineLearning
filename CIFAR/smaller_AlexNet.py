@@ -66,13 +66,14 @@ def preprocessing(x,c_x=28,c_y=28,normalize=True,center_crop=True,whitening=True
     return new_x
 
 class model_hyperparam(object):
-    def __init__(self,learning_rate,batch_size,epochs,momentum,decay_factor,num_channels):
+    def __init__(self,learning_rate,batch_size,epochs,momentum,decay_factor,num_channels,scheduler):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epochs = epochs
         self.momentum = momentum
         self.decay_factor = decay_factor
         self.num_channels = num_channels
+        self.scheduler = scheduler
         
 class CIFAR(Dataset):
     def __init__(self,data,label):
@@ -86,21 +87,37 @@ class CIFAR(Dataset):
     def __getitem__(self, idx):
         return self.data[idx,:,:,:], self.label[idx]
     
-class Conv(nn.Module):
+class ConvPool(nn.Module):
     def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
-        super(Conv, self).__init__()
+        super(ConvPool, self).__init__()
         self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding)
+        # self.batchnorm = nn.BatchNorm2d(output_channel) 
         self.max = nn.MaxPool2d(3, stride=2,padding=0)
         # self.localnorm = nn.LocalResponseNorm(5,alpha=1e-4,beta=0.75,k=2)
         self.relu = nn.ReLU()
 
+
     def forward(self, x):
         x = self.conv(x)
+        # x = self.batchnorm(x)
         x = self.max(x)
         # x = self.localnorm(x)
         x = self.relu(x)
+
         return x
-    
+
+class Conv(nn.Module):
+    def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
+        super(Conv, self).__init__()
+        self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.relu = nn.ReLU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        # x = self.localnorm(x)
+        x = self.relu(x)
+        return x
+
 class fullconnect(nn.Module):
     def __init__(self,input_channel,output_channel):
         super(fullconnect, self).__init__()
@@ -112,31 +129,33 @@ class fullconnect(nn.Module):
         x = self.relu(x)
         return x
     
-class AlexnetSmall(nn.Module):
+class AlexnetSmaller(nn.Module):
     def __init__(self,input_channel):
-        super(AlexnetSmall, self).__init__()
-        self.conv1 = Conv(input_channel,128,5,1,2)
-        self.conv2 = Conv(128,256,5,1,2)
-        self.maxpool = nn.MaxPool2d(3, stride=2)
+        super(AlexnetSmaller, self).__init__()
+        self.conv1 = ConvPool(input_channel,64,3,1,1)
+        self.conv2 = ConvPool(64,96,3,1,1)
+        # self.maxpool = nn.MaxPool2d(3, stride=2)
 
-        # self.fc1 = fullconnect(1024,384)
-
+        self.conv3 = ConvPool(96,256,3,1,1)
+        # self.conv4 = ConvPool(64,64,3,1,1)
+        # self.conv5 = Conv(64,128,3,1,1)
+        # self.conv6 = ConvPool(128,128,3,1,1)
+        # self.fc1 = fullconnect(6912,192)
         self.fc1 = nn.Linear(1024, 10)  # 10-way classification
 
     def forward(self, x):
         x = self.conv1(x)
-        # print('conv1 done',x.shape)
         x = self.conv2(x)
-        # print('conv2 done',x.shape)
-        x = self.maxpool(x)
-        # print('max pool is done',x.shape)
+        # x = self.maxpool(x)
+        x = self.conv3(x)
+        # x = self.conv4(x)
+        # x = self.conv5(x)
+        # x = self.conv6(x)
+        
         x = torch.flatten(x,1)
-        # print('x dimension after flattening',x.shape)
         x = self.fc1(x)
-        # print('fc1 done')
         # x = self.fc2(x)
-        # print('fc2 done')
-        # print('fc3 done',x.shape)
+
         return x
     
 def train_loop(dataloader, model, loss_fn, optimizer,device,batch_size):
@@ -202,21 +221,35 @@ def test_loop(dataloader, model, loss_fn,device):
     print(f"Test Error: \n Accuracy: {(100*correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
     return correct,test_loss
     
+def weight_init(layer,scale_factor=1):
+    if isinstance(layer, nn.Linear):  # For fully connected layers
+        std = scale_factor * (2 / layer.in_features)**0.5
+        nn.init.normal_(layer.weight, mean=0, std=std)
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
+    elif isinstance(layer, nn.Conv2d):  # For convolutional layers
+        n_in = layer.in_channels * layer.kernel_size[0] * layer.kernel_size[1]
+        std = scale_factor * (2 / n_in)**0.5
+        nn.init.normal_(layer.weight, mean=0, std=std)
+        if layer.bias is not None:
+            nn.init.zeros_(layer.bias)
+
 def main():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("--random_label",type=bool,default=False)
     parser.add_argument("--corrupt_percentage",type=int,default=0)
     parser.add_argument("--loss_function",type=str,default='cross_entropy')
+    parser.add_argument("--initialize_weights",type=bool,default=False)
 
     args = parser.parse_known_args()[0]
     args_dict = vars(args)
-    print(args,args_dict)
+    print(args_dict)
 
-    hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=5000,momentum=0.9,decay_factor=0.95,num_channels=3)
+    hyperparams = model_hyperparam(learning_rate=0.01,batch_size=128,epochs=5000,momentum=0.9,decay_factor=0.95,num_channels=3,scheduler='exponential')
 
     directory = '/om2/user/shenwang/deeplearning/CIFAR/cifar-10-python/cifar-10-batches-py'
-    model_folder = 'small_alexnet'
+    model_folder = 'smaller_alexnet'
     data_prefix = 'data'
     test_prefix = 'test'
 
@@ -241,7 +274,6 @@ def main():
     training_labels = changeDimension(training_labels,hyperparams.num_channels)
     test_raw_images = changeDimension(test_raw_images,hyperparams.num_channels)
     test_labels = changeDimension(test_labels,hyperparams.num_channels)
-
     training_images = preprocessing(training_raw_images)
     test_images = preprocessing(test_raw_images)
 
@@ -280,12 +312,10 @@ def main():
 
     if torch.backends.mps.is_available():
         device = torch.device("mps")
-
     elif torch.cuda.is_available():
         device = torch.device("cuda")
     else:
         device = torch.device("cpu")
-    # device = torch.device("cpu")
     print(device)
 
     data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
@@ -294,20 +324,21 @@ def main():
     train_dataloader = DataLoader(data_train, batch_size= hyperparams.batch_size,shuffle=True,num_workers=4,pin_memory=True)
     test_dataloader = DataLoader(data_test, batch_size=hyperparams.batch_size,shuffle=True, num_workers=4,pin_memory=True)
 
-    model = AlexnetSmall(3).to(device)
-    
-    # model = InceptionSmall(3).to(device) # we do not specify ``weights``, i.e. create untrained model
-    # model.load_state_dict(torch.load(directory + os.sep + 'model' + os.sep + 'model_weights0.pth', weights_only=True))
+    model = AlexnetSmaller(3).to(device)
+    if args.initialize_weights:
+        model.apply(weight_init)
 
     optimizer = optim.SGD(model.parameters(), lr=hyperparams.learning_rate,momentum=hyperparams.momentum)
-
-    scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.decay_factor)
+    if hyperparams.scheduler == 'exponential':
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=hyperparams.decay_factor)
+    if hyperparams.scheduler == 'cosine':
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer,T_max=10)
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Number of parameters: {total_params}")
 
     with open(plotdir + os.sep + 'arguments.pkl', 'wb') as file:
-        pickle.dump([args_dict], file)
+        pickle.dump([args_dict,hyperparams], file)
 
     start_time = time.time()
 
