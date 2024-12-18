@@ -9,6 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import DataLoader,Dataset
+from torch.nn.utils.parametrizations import weight_norm
 
 def unpickle(file):
     import pickle
@@ -90,7 +91,7 @@ class CIFAR(Dataset):
 class ConvPool(nn.Module):
     def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
         super(ConvPool, self).__init__()
-        self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.conv = weight_norm(nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding,bias=False))
         # self.batchnorm = nn.BatchNorm2d(output_channel) 
         self.max = nn.MaxPool2d(3, stride=2,padding=0)
         # self.localnorm = nn.LocalResponseNorm(5,alpha=1e-4,beta=0.75,k=2)
@@ -109,7 +110,7 @@ class ConvPool(nn.Module):
 class Conv(nn.Module):
     def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
         super(Conv, self).__init__()
-        self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding)
+        self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding,bias=False)
         self.relu = nn.ReLU()
 
     def forward(self, x):
@@ -132,16 +133,16 @@ class fullconnect(nn.Module):
 class AlexnetSmaller(nn.Module):
     def __init__(self,input_channel):
         super(AlexnetSmaller, self).__init__()
-        self.conv1 = ConvPool(input_channel,64,3,1,1)
-        self.conv2 = ConvPool(64,96,3,1,1)
+        self.conv1 = ConvPool(input_channel,128,3,1,1)
+        self.conv2 = ConvPool(128,192,3,1,1)
         # self.maxpool = nn.MaxPool2d(3, stride=2)
 
-        self.conv3 = ConvPool(96,256,3,1,1)
+        self.conv3 = ConvPool(192,256,3,1,1)
         # self.conv4 = ConvPool(64,64,3,1,1)
         # self.conv5 = Conv(64,128,3,1,1)
         # self.conv6 = ConvPool(128,128,3,1,1)
         # self.fc1 = fullconnect(6912,192)
-        self.fc1 = nn.Linear(1024, 10)  # 10-way classification
+        self.fc1 = nn.Linear(1024, 10,bias=False)  # 10-way classification
 
     def forward(self, x):
         x = self.conv1(x)
@@ -321,8 +322,8 @@ def main():
     data_train = CIFAR(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
     data_test = CIFAR(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
 
-    train_dataloader = DataLoader(data_train, batch_size= hyperparams.batch_size,shuffle=True,num_workers=4,pin_memory=True)
-    test_dataloader = DataLoader(data_test, batch_size=hyperparams.batch_size,shuffle=True, num_workers=4,pin_memory=True)
+    train_dataloader = DataLoader(data_train, batch_size= hyperparams.batch_size,shuffle=True,num_workers=2,pin_memory=True)
+    test_dataloader = DataLoader(data_test, batch_size=hyperparams.batch_size,shuffle=True, num_workers=2,pin_memory=True)
 
     model = AlexnetSmaller(3).to(device)
     if args.initialize_weights:
@@ -352,7 +353,7 @@ def main():
         current_time = time.time()
         elapsed_time = current_time - start_time
         print(f'elapsed time is:{elapsed_time} seconds')
-        if t % 50 ==0:
+        if t % 100 ==0:
             torch.save({
             'epoch': t,
             'model_state_dict': model.state_dict(),
@@ -362,8 +363,8 @@ def main():
         if t % 10==0:
             print(f'saving running results')
         
-        with open(plotdir + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
-            pickle.dump([train_correct,train_loss,test_correct,test_loss], file)
+            with open(plotdir + os.sep + 'file' + str(t) +'.pkl', 'wb') as file:
+                pickle.dump([train_correct,train_loss,test_correct,test_loss], file)
     print("Done!")
 
 if __name__ == '__main__':
