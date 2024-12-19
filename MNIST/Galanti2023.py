@@ -281,8 +281,8 @@ def main():
     data_train = MNIST(torch.tensor(training_images,dtype=torch.float32),torch.tensor(training_labels,dtype=torch.long))
     data_test = MNIST(torch.tensor(test_images,dtype=torch.float32),torch.tensor(test_labels,dtype=torch.long))
 
-    train_dataloader = DataLoader(data_train, batch_size= hyperparams.batch_size,shuffle=True,num_workers=4,pin_memory=True)
-    test_dataloader = DataLoader(data_test, batch_size=hyperparams.batch_size,shuffle=True, num_workers=4,pin_memory=True)
+    train_dataloader = DataLoader(data_train, batch_size= hyperparams.batch_size,shuffle=True,num_workers=2,pin_memory=True)
+    test_dataloader = DataLoader(data_test, batch_size=hyperparams.batch_size,shuffle=True, num_workers=2,pin_memory=True)
 
     model = CNN(1).to(device)
     

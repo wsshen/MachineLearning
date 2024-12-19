@@ -91,7 +91,7 @@ class CIFAR(Dataset):
 class ConvPool(nn.Module):
     def __init__(self,input_channel,output_channel,kernel_size,stride,padding):
         super(ConvPool, self).__init__()
-        self.conv = weight_norm(nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding,bias=False))
+        self.conv = nn.Conv2d(input_channel, output_channel, kernel_size=kernel_size, stride=stride, padding=padding,bias=False)
         # self.batchnorm = nn.BatchNorm2d(output_channel) 
         self.max = nn.MaxPool2d(3, stride=2,padding=0)
         # self.localnorm = nn.LocalResponseNorm(5,alpha=1e-4,beta=0.75,k=2)
