@@ -133,16 +133,16 @@ class fullconnect(nn.Module):
 class AlexnetSmaller(nn.Module):
     def __init__(self,input_channel):
         super(AlexnetSmaller, self).__init__()
-        self.conv1 = ConvPool(input_channel,128,3,1,1)
-        self.conv2 = ConvPool(128,192,3,1,1)
+        self.conv1 = Conv(input_channel,128,3,2,1)
+        self.conv2 = Conv(128,192,3,2,1)
         # self.maxpool = nn.MaxPool2d(3, stride=2)
 
-        self.conv3 = ConvPool(192,256,3,1,1)
+        self.conv3 = Conv(192,256,3,2,1)
         # self.conv4 = ConvPool(64,64,3,1,1)
         # self.conv5 = Conv(64,128,3,1,1)
         # self.conv6 = ConvPool(128,128,3,1,1)
         # self.fc1 = fullconnect(6912,192)
-        self.fc1 = nn.Linear(1024, 10,bias=False)  # 10-way classification
+        self.fc1 = nn.Linear(4096, 10,bias=False)  # 10-way classification
 
     def forward(self, x):
         x = self.conv1(x)
